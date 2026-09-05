@@ -22,13 +22,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
+    outputs:
+      date: ${{ steps.version.outputs.date }}
+      repo_commit: ${{ steps.version.outputs.repo_commit }}
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Generate build version
         id: version
@@ -41,7 +46,7 @@ jobs:
           repo_commit=$(git rev-parse --short=10 HEAD)
           upstream_base=$(git merge-base HEAD upstream/master)
           upstream_commit=$(git rev-parse --short=10 "$upstream_base")
-          version="naoki66-${build_time}-${repo_commit}-${upstream_commit}"
+          version="xr1710g-${build_time}-${repo_commit}-${upstream_commit}"
 
           echo "date=${build_time%%-*}" >> $GITHUB_OUTPUT
           echo "repo_commit=$repo_commit" >> $GITHUB_OUTPUT
@@ -58,6 +63,7 @@ jobs:
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          bash scripts/apply-feed-patches.sh
 
       - name: Configure
         run: |
@@ -66,7 +72,7 @@ jobs:
                  -e '/^# CONFIG_VERSION_DIST is not set$/d' \
                  -e '/^CONFIG_VERSION_NUMBER=/d' \
                  -e '/^# CONFIG_VERSION_NUMBER is not set$/d' .config
-          echo 'CONFIG_VERSION_DIST="ImmortalWrt naoki66"' >> .config
+          echo 'CONFIG_VERSION_DIST="ImmortalWrt XR1710G"' >> .config
           echo 'CONFIG_VERSION_NUMBER="${{ steps.version.outputs.version }}"' >> .config
           make defconfig
 
@@ -76,6 +82,7 @@ jobs:
       - name: Build Firmware
         shell: bash
         run: |
+          set -o pipefail
           make -j2 world 2>&1 | tee build.log
 
       - name: Check build status
@@ -94,7 +101,7 @@ jobs:
           ls -la bin/ 2>/dev/null || echo "No files found in bin directory"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: router-firmware
           path: |
@@ -107,20 +114,27 @@ jobs:
           retention-days: 30
         if: always()
 
+  release:
+    if: github.event.inputs.release_type != 'none'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: router-firmware
+          path: release-artifacts
+
       - name: Build release body
-        if: github.event.inputs.release_type != 'none'
         id: release_body
         env:
           RELEASE_NOTES: ${{ github.event.inputs.release_notes }}
         run: |
           {
             printf '%s\n' "$RELEASE_NOTES"
-            echo ""
-            echo "---"
-            echo ""
-            echo "如果您觉得对您有帮助，请我喝杯咖啡吧，让我更有动力持续更新。"
-            echo ""
-            echo '<img width="400" height="400" alt="c6ea388c976395326514814f80d512d5" src="https://github.com/user-attachments/assets/0ac90d58-ac73-4dc1-b926-276e539e5d0f" />'
           } > /tmp/release_body.md
           {
             echo "body<<EOF"
@@ -129,19 +143,18 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Create Release
-        if: github.event.inputs.release_type != 'none'
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@5113cdc90fd4d541c801c55356214017bf5ae34b # v3
         with:
-          tag_name: ${{ format('{0}-{1}', steps.version.outputs.date, steps.version.outputs.repo_commit) }}
-          name: ${{ format('{0} - XR1710G Build ({1})', steps.version.outputs.date, steps.version.outputs.repo_commit) }}
+          tag_name: ${{ format('{0}-{1}', needs.build.outputs.date, needs.build.outputs.repo_commit) }}
+          name: ${{ format('{0} - XR1710G Build ({1})', needs.build.outputs.date, needs.build.outputs.repo_commit) }}
           body: ${{ steps.release_body.outputs.body }}
           draft: false
           prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
           files: |
-            bin/targets/airoha/an7581/*.itb
-            bin/targets/airoha/an7581/config.buildinfo
-            bin/targets/airoha/an7581/feeds.buildinfo
-            bin/targets/airoha/an7581/version.buildinfo
-            bin/targets/airoha/an7581/sha256sums
+            release-artifacts/*.itb
+            release-artifacts/config.buildinfo
+            release-artifacts/feeds.buildinfo
+            release-artifacts/version.buildinfo
+            release-artifacts/sha256sums
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -12,7 +12,7 @@
 
 基于 [ImmortalWrt](https://github.com/immortalwrt/immortalwrt) 为 Gemtek XR1710G（Brightspeed XR1710G）路由器定制的固件。
 
-默认管理地址：http://192.168.50.1 或 http://immortalwrt.lan，用户名：**root**，密码：*无*。
+固件默认为纯 AP 模式，所有网口和三频 Wi-Fi 均处于同一二层网络；管理地址由上级 DHCP 服务器分配。请在上级路由器的 DHCP 租约中查找本机地址。用户名：**root**，密码：*无*。
 
 首次启动的无线网络为 `ImmortalWrt-2G`、`ImmortalWrt-5G` 和 `ImmortalWrt-6G`，统一初始密码为 `12345678`。2.4GHz 使用 WPA2，5GHz 使用 WPA2/WPA3 混合模式，6GHz 使用 WPA3；首次登录后请及时修改管理密码和无线密码。
 
@@ -55,8 +55,8 @@
 
 ### 网络与无线默认行为
 
-- 默认 LAN 地址为 `192.168.50.1`；IPv6 使用 SLAAC/EUI-64，关闭 DHCPv6/NDP 与 RA DNS/附加标志，减少国内网络环境下的兼容性问题。
-- 默认开启 firewall4 软件 flow offload 与硬件 flow offload；VLAN-aware bridge、PPPoE 和 AP 模式的 NPU/PPE 加速可在 NPU 页面按需启用，并由 FlowSense 展示运行状态。
+- 默认为纯 AP：`wan`、`lan2`、`lan3`、`lan4` 与三个无线射频全部桥接到 `br-lan`，管理接口通过上级 DHCP 获取地址，本机不提供 DNS、DHCP、RA 或 NDP 服务。
+- 默认开启 firewall4 软件/硬件 flow offload 与 AP 桥接 NPU/PPE 加速；VLAN-aware bridge 和 PPPoE 加速仍可在 NPU 页面按需配置，并由 FlowSense 展示运行状态。
 - 三个无线射频默认启用：2.4GHz 为 HE20/自动信道/28dBm，5GHz 为 EHT160/信道 36/30dBm，6GHz 为 EHT320/信道 37/30dBm。
 - FlowSense 提供 Router/AP 模式、VLAN/PPPoE/AP 加速状态与自定义 Ping 延迟检测；NPU 页面提供 PPE/Frame Engine、CPU 频率与安全超频控制；风扇页面提供实时温度、RPM/PWM 曲线与自定义曲线。
 

@@ -45,8 +45,8 @@ define Package/$(LUCI_NAME)/postinst
 # Reload rpcd to register the new luci.airoha_npu backend
 /etc/init.d/rpcd reload 2>/dev/null
 
-# Bridge acceleration is opt-in through the NPU page. Remove defaults from
-# earlier builds so only firewall hardware flow offload is enabled by default.
+# Remove obsolete filenames from earlier builds. XR1710G images now ship the
+# canonical 12-apmode-offload.conf default in target base-files.
 rm -f /etc/sysctl.d/10-bridge-offload.conf /etc/sysctl.d/99-bridge-offload.conf
 
 # Clear LuCI cache so the new menu entries are picked up

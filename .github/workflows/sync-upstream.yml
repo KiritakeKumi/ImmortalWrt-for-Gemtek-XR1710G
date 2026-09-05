@@ -7,13 +7,15 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   sync-upstream:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -47,15 +49,28 @@ jobs:
       - name: Merge upstream
         if: steps.check.outputs.has_updates == 'true'
         run: |
+          git checkout -B automated/upstream-sync
           git merge --no-edit upstream/master || {
             echo "::error::Merge failed. Conflicts need manual resolution."
             git diff --name-only --diff-filter=U
             exit 1
           }
 
-      - name: Push to origin
+      - name: Push review branch
         if: steps.check.outputs.has_updates == 'true'
-        run: git push origin master
+        run: git push --force origin HEAD:automated/upstream-sync
+
+      - name: Open review pull request
+        if: steps.check.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr view automated/upstream-sync >/dev/null 2>&1 || \
+            gh pr create \
+              --base master \
+              --head automated/upstream-sync \
+              --title 'chore: sync ImmortalWrt upstream' \
+              --body 'Automated upstream merge for review. Build and inspect this change before merging.'
 
       - name: Show result
         if: always()

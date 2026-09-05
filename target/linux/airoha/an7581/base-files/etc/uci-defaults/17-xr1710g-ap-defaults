@@ -1,0 +1,45 @@
+#!/bin/sh
+
+. /lib/functions/system.sh
+
+[ "$(board_name)" = "gemtek,xr1710g-ubi" ] || exit 0
+
+# Only apply this policy to the factory-generated AP topology. In particular,
+# do not alter a router setup preserved across sysupgrade.
+[ "$(uci -q get network.lan.proto)" = "dhcp" ] || exit 0
+[ -z "$(uci -q get network.wan)" ] || exit 0
+
+# The upstream router owns DHCP, DNS and IPv6 announcements.  Keeping the
+# existing lan interface name also makes generated Wi-Fi VIFs join br-lan.
+uci -q set dhcp.lan.ignore='1'
+uci -q set dhcp.lan.dhcpv4='disabled'
+uci -q set dhcp.lan.dhcpv6='disabled'
+uci -q set dhcp.lan.ra='disabled'
+uci -q set dhcp.lan.ndp='disabled'
+uci -q set dhcp.@dnsmasq[0].authoritative='0'
+uci -q set dhcp.@dnsmasq[0].port='0'
+uci -q commit dhcp
+
+# Bridge netfilter supplies the flowtable hooks used by the Airoha PPE for L2
+# wired/Wi-Fi offload. Persist and apply the values on this first boot.
+modprobe br_netfilter 2>/dev/null
+cat > /etc/sysctl.d/12-apmode-offload.conf <<'EOF'
+net.bridge.bridge-nf-call-iptables=1
+net.bridge.bridge-nf-call-ip6tables=1
+net.bridge.bridge-nf-call-arptables=1
+net.bridge.bridge-nf-filter-vlan-tagged=0
+net.bridge.bridge-nf-pass-vlan-input-dev=0
+EOF
+
+for setting in \
+	bridge-nf-call-iptables=1 \
+	bridge-nf-call-ip6tables=1 \
+	bridge-nf-call-arptables=1 \
+	bridge-nf-filter-vlan-tagged=0 \
+	bridge-nf-pass-vlan-input-dev=0; do
+	name="${setting%%=*}"
+	value="${setting#*=}"
+	echo "$value" > "/proc/sys/net/bridge/$name" 2>/dev/null
+done
+
+exit 0
