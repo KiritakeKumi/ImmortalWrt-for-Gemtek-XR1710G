@@ -93,10 +93,7 @@ Assisted-by: Codex:GPT-5.6-sol
  #define RTL8201F_IER				0x13
  
  #define RTL8201F_ISR				0x1e
-@@ -3260,5 +3263,7 @@ static int rtl826x_probe(struct phy_devi
- 	priv->enable_pma_low_power = device_property_read_bool(dev, "realtek,enable-pma-low-power");
- 	priv->patch_rtk_serdes =
- 		device_property_read_bool(dev, "realtek,patch-rtk-serdes");
+@@ -3263,2 +3266,4 @@ static int rtl826x_probe(struct phy_devi
  	priv->phydev = phydev;
 +	if (priv->patch_rtk_serdes)
 +		priv->rtk_serdes_state = RTL826X_RTK_SERDES_PULSE;
