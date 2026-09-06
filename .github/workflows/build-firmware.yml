@@ -90,6 +90,8 @@ jobs:
 
           build_status=${PIPESTATUS[0]}
           echo "Parallel build failed with status $build_status."
+          echo "Re-running mt76 serially with verbose output for diagnosis."
+          make -j1 V=sc package/kernel/mt76/compile 2>&1 | tee mt76-debug.log || true
           echo "Re-running mac80211 serially with verbose output for diagnosis."
           make -j1 V=sc package/kernel/mac80211/compile 2>&1 | tee mac80211-debug.log || true
           echo "Re-running target/linux serially with verbose output for diagnosis."
@@ -110,6 +112,10 @@ jobs:
             echo "=== Verbose mac80211 failure ==="
             tail -300 mac80211-debug.log
           fi
+          if [ -f mt76-debug.log ]; then
+            echo "=== Verbose mt76 failure ==="
+            tail -300 mt76-debug.log
+          fi
           echo "=== List all files in bin/targets/airoha/an7581/ ==="
           ls -la bin/targets/airoha/an7581/ 2>/dev/null || echo "No files found in an7581 directory"
           echo "=== List all files in bin/targets/airoha/ ==="
@@ -126,6 +132,7 @@ jobs:
           path: |
             build.log
             mac80211-debug.log
+            mt76-debug.log
             target-linux-debug.log
             bin/targets/airoha/an7581/*.itb
             bin/targets/airoha/an7581/config.buildinfo
