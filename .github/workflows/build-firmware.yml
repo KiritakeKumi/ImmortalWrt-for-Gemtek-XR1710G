@@ -41,7 +41,7 @@ jobs:
           repo_commit=$(git rev-parse --short=10 HEAD)
           upstream_base=$(git merge-base HEAD upstream/master)
           upstream_commit=$(git rev-parse --short=10 "$upstream_base")
-          version="naoki66-${build_time}-${repo_commit}-${upstream_commit}"
+          version="xr1710g-${build_time}-${repo_commit}-${upstream_commit}"
 
           echo "date=${build_time%%-*}" >> $GITHUB_OUTPUT
           echo "repo_commit=$repo_commit" >> $GITHUB_OUTPUT
@@ -66,7 +66,7 @@ jobs:
                  -e '/^# CONFIG_VERSION_DIST is not set$/d' \
                  -e '/^CONFIG_VERSION_NUMBER=/d' \
                  -e '/^# CONFIG_VERSION_NUMBER is not set$/d' .config
-          echo 'CONFIG_VERSION_DIST="ImmortalWrt naoki66"' >> .config
+          echo 'CONFIG_VERSION_DIST="ImmortalWrt XR1710G"' >> .config
           echo 'CONFIG_VERSION_NUMBER="${{ steps.version.outputs.version }}"' >> .config
           make defconfig
 
@@ -107,34 +107,13 @@ jobs:
           retention-days: 30
         if: always()
 
-      - name: Build release body
-        if: github.event.inputs.release_type != 'none'
-        id: release_body
-        env:
-          RELEASE_NOTES: ${{ github.event.inputs.release_notes }}
-        run: |
-          {
-            printf '%s\n' "$RELEASE_NOTES"
-            echo ""
-            echo "---"
-            echo ""
-            echo "如果您觉得对您有帮助，请我喝杯咖啡吧，让我更有动力持续更新。"
-            echo ""
-            echo '<img width="400" height="400" alt="c6ea388c976395326514814f80d512d5" src="https://github.com/user-attachments/assets/0ac90d58-ac73-4dc1-b926-276e539e5d0f" />'
-          } > /tmp/release_body.md
-          {
-            echo "body<<EOF"
-            cat /tmp/release_body.md
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
       - name: Create Release
         if: github.event.inputs.release_type != 'none'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ format('{0}-{1}', steps.version.outputs.date, steps.version.outputs.repo_commit) }}
           name: ${{ format('{0} - XR1710G Build ({1})', steps.version.outputs.date, steps.version.outputs.repo_commit) }}
-          body: ${{ steps.release_body.outputs.body }}
+          body: ${{ github.event.inputs.release_notes }}
           draft: false
           prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
           files: |
