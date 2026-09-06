@@ -90,6 +90,8 @@ jobs:
 
           build_status=${PIPESTATUS[0]}
           echo "Parallel build failed with status $build_status."
+          echo "Re-running mac80211 serially with verbose output for diagnosis."
+          make -j1 V=sc package/kernel/mac80211/compile 2>&1 | tee mac80211-debug.log || true
           echo "Re-running target/linux serially with verbose output for diagnosis."
           make -j1 V=sc target/linux/compile 2>&1 | tee target-linux-debug.log || true
           exit "$build_status"
@@ -103,6 +105,10 @@ jobs:
           if [ -f target-linux-debug.log ]; then
             echo "=== Verbose target/linux failure ==="
             tail -300 target-linux-debug.log
+          fi
+          if [ -f mac80211-debug.log ]; then
+            echo "=== Verbose mac80211 failure ==="
+            tail -300 mac80211-debug.log
           fi
           echo "=== List all files in bin/targets/airoha/an7581/ ==="
           ls -la bin/targets/airoha/an7581/ 2>/dev/null || echo "No files found in an7581 directory"
@@ -119,6 +125,7 @@ jobs:
           name: router-firmware
           path: |
             build.log
+            mac80211-debug.log
             target-linux-debug.log
             bin/targets/airoha/an7581/*.itb
             bin/targets/airoha/an7581/config.buildinfo

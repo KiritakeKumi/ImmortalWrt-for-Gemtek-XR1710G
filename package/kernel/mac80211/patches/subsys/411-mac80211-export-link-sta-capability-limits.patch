@@ -14,9 +14,9 @@ confusing capability limits with the current operating mode.
 Assisted-by: Codex:gpt-5.6-sol
 Signed-off-by: Yanghan Ye <yyh94306@gmail.com>
 ---
- include/net/mac80211.h | 15 +++++++++++++++
- net/mac80211/vht.c     | 31 +++++++++++++++++++++++++++++++
- 2 files changed, 46 insertions(+)
+ include/net/mac80211.h  | 17 +++++++++++++++++
+ net/mac80211/sta_info.c | 38 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 55 insertions(+)
 
 --- a/include/net/mac80211.h
 +++ b/include/net/mac80211.h
@@ -42,22 +42,29 @@ Signed-off-by: Yanghan Ye <yyh94306@gmail.com>
  /* for older drivers - let's not document these ... */
  int ieee80211_emulate_add_chanctx(struct ieee80211_hw *hw,
  				  struct ieee80211_chanctx_conf *ctx);
---- a/net/mac80211/vht.c
-+++ b/net/mac80211/vht.c
-@@ -445,6 +445,37 @@ _ieee80211_sta_cap_rx_bw(struct link_sta_info *link_sta,
- 		   link_sta->rx_omi_bw_rx);
+--- a/net/mac80211/sta_info.c
++++ b/net/mac80211/sta_info.c
+@@ -3670,6 +3670,44 @@ ieee80211_sta_bw_capability(struct link_sta_info *link_sta,
+ 	return IEEE80211_STA_RX_BW_80;
  }
  
 +enum ieee80211_sta_rx_bandwidth
 +ieee80211_link_sta_cap_bw(struct ieee80211_link_sta *pub)
 +{
 +	struct sta_info *sta = container_of(pub->sta, struct sta_info, sta);
++	struct ieee80211_sub_if_data *sdata = sta->sdata;
++	struct ieee80211_bss_conf *link_conf;
 +	struct link_sta_info *link_sta;
 +	enum ieee80211_sta_rx_bandwidth bw;
 +
 +	rcu_read_lock();
 +	link_sta = rcu_dereference(sta->link[pub->link_id]);
-+	bw = ieee80211_sta_cap_rx_bw(link_sta);
++	link_conf = rcu_dereference(sdata->vif.link_conf[pub->link_id]);
++	if (WARN_ON_ONCE(!link_sta || !link_conf || !link_conf->chanreq.oper.chan))
++		bw = pub->bandwidth;
++	else
++		bw = ieee80211_sta_bw_capability(link_sta,
++						  link_conf->chanreq.oper.chan->band);
 +	rcu_read_unlock();
 +
 +	return bw;
@@ -79,8 +86,8 @@ Signed-off-by: Yanghan Ye <yyh94306@gmail.com>
 +}
 +EXPORT_SYMBOL(ieee80211_link_sta_cap_nss);
 +
- enum nl80211_chan_width
- ieee80211_sta_cap_chan_bw(struct link_sta_info *link_sta)
- {
+ /**
+  * ieee80211_sta_usable_bw - get STA's usable bandwidth capability
+  * @link_sta: the (link) STA to get the capability for
 -- 
 2.51.0
