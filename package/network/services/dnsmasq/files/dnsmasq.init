@@ -1290,7 +1290,10 @@ dnsmasq_start()
 
 	config_get_bool dns_redirect "$cfg" dns_redirect 0
 	config_get dns_port "$cfg" port 53
-	if [ "$dns_redirect" = 1 ]; then
+	# Port 0 disables the DNS service. Do not install a redirect to port 0,
+	# otherwise bridged DNS traffic is intercepted even when dnsmasq is used
+	# for DHCP only (or is disabled entirely in a dumb AP configuration).
+	if [ "$dns_redirect" = 1 ] && [ "$dns_port" -gt 0 ] 2>/dev/null; then
 		nft add table inet dnsmasq
 		nft add chain inet dnsmasq prerouting "{ type nat hook prerouting priority -95; policy accept; }"
 		nft add rule inet dnsmasq prerouting "meta nfproto { ipv4, ipv6 } udp dport 53 counter redirect to :$dns_port comment \"DNSMASQ HIJACK\""

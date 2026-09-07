@@ -18,6 +18,7 @@ uci -q set dhcp.lan.ra='disabled'
 uci -q set dhcp.lan.ndp='disabled'
 uci -q set dhcp.@dnsmasq[0].authoritative='0'
 uci -q set dhcp.@dnsmasq[0].port='0'
+uci -q set dhcp.@dnsmasq[0].dns_redirect='0'
 uci -q commit dhcp
 
 # Bridge netfilter provides the flowtable hooks used by the baseline Airoha
