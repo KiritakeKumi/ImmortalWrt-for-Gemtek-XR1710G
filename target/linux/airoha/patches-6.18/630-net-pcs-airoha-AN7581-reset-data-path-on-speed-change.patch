@@ -1,0 +1,98 @@
+From: Ryan Chen <rchen14b@gmail.com>
+Date: Thu, 06 Mar 2026 12:00:00 -0600
+Subject: [PATCH] net: pcs: airoha: AN7581: reset data path on speed change
+
+When phylink renegotiates a new speed within USXGMII mode, link_up() is
+called without another pcs_config(). Resetting TXPCS alone leaves the RX
+PCS, FIFOs and PMA digital logic configured for the previous speed. The
+netdev then reports carrier while silently dropping traffic.
+
+Perform a full digital reset on subsequent USXGMII and 10GBASE-R link-up
+events. Skip it on the first link-up after bringup(), because bringup()
+already initialized the complete data path and the external PHY firmware
+may still be loading at that point.
+
+This is adapted to the indexed PCS implementation used by Linux 6.18.
+
+Signed-off-by: Ryan Chen <rchen14b@gmail.com>
+Signed-off-by: Kiritake Kumi <root@niconiconi.us>
+--- a/drivers/net/pcs/airoha/pcs-airoha.h
++++ b/drivers/net/pcs/airoha/pcs-airoha.h
+@@ -1668,4 +1668,5 @@ struct airoha_pcs_priv {
+ 	bool manual_rx_calib;
+ 	bool tx_fir_override;
+ 	struct airoha_pcs_tx_fir tx_fir;
++	bool needs_full_init[2];
+ };
+--- a/drivers/net/pcs/airoha/pcs-airoha-common.c
++++ b/drivers/net/pcs/airoha/pcs-airoha-common.c
+@@ -513,6 +513,7 @@ static int airoha_pcs_config(struct phyl
+ 		ret = data->bringup(priv, index, interface);
+ 		if (ret)
+ 			return ret;
++		priv->needs_full_init[index] = true;
+ 	}
+ 
+ 	/* Set final configuration for various modes */
+--- a/drivers/net/pcs/airoha/pcs-an7581.c
++++ b/drivers/net/pcs/airoha/pcs-an7581.c
+@@ -1918,14 +1918,59 @@ void an7581_pcs_phya_link_up(struct airo
+ {
+ 	struct regmap *pcs_pma = priv->pcs_pma[index];
++	u32 rst_mask = AIROHA_PCS_PMA_SW_HSG_RXPCS_RST_N |
++		       AIROHA_PCS_PMA_SW_HSG_TXPCS_RST_N |
++		       AIROHA_PCS_PMA_SW_XFI_RXPCS_BIST_RST_N |
++		       AIROHA_PCS_PMA_SW_XFI_RXPCS_RST_N |
++		       AIROHA_PCS_PMA_SW_XFI_TXPCS_RST_N |
++		       AIROHA_PCS_PMA_SW_TX_FIFO_RST_N |
++		       AIROHA_PCS_PMA_SW_REF_RST_N |
++		       AIROHA_PCS_PMA_SW_ALLPCS_RST_N |
++		       AIROHA_PCS_PMA_SW_PMA_RST_N |
++		       AIROHA_PCS_PMA_SW_TX_RST_N |
++		       AIROHA_PCS_PMA_SW_RX_RST_N |
++		       AIROHA_PCS_PMA_SW_RX_FIFO_RST_N;
++	u32 val;
++	int i;
++
++	/* Serialize with any reset still completing from PCS bringup. */
++	for (i = 0; i < 50; i++) {
++		regmap_read(pcs_pma, AIROHA_PCS_PMA_SW_RST_SET, &val);
++		if ((val & rst_mask) == rst_mask)
++			break;
++		usleep_range(1000, 2000);
++	}
+ 
+ 	/* Reset TXPCS on link up */
+ 	regmap_clear_bits(pcs_pma, AIROHA_PCS_PMA_SW_RST_SET,
+ 			  AIROHA_PCS_PMA_SW_HSG_TXPCS_RST_N);
+ 
+ 	usleep_range(100, 200);
+ 
+ 	regmap_set_bits(pcs_pma, AIROHA_PCS_PMA_SW_RST_SET,
+ 			AIROHA_PCS_PMA_SW_HSG_TXPCS_RST_N);
++
++	if (priv->interface != PHY_INTERFACE_MODE_USXGMII &&
++	    priv->interface != PHY_INTERFACE_MODE_10GBASER)
++		return;
++
++	if (priv->needs_full_init[index]) {
++		priv->needs_full_init[index] = false;
++		return;
++	}
++
++	an7581_pcs_cdr_reset(priv, index, priv->interface, false);
++
++	/* Assert every digital reset except the reference clock reset. */
++	regmap_update_bits(pcs_pma, AIROHA_PCS_PMA_SW_RST_SET,
++			   rst_mask, AIROHA_PCS_PMA_SW_REF_RST_N);
++
++	usleep_range(100, 200);
++
++	regmap_set_bits(pcs_pma, AIROHA_PCS_PMA_SW_RST_SET, rst_mask);
++
++	usleep_range(5000, 7000);
++
++	an7581_pcs_cdr_reset(priv, index, priv->interface, false);
+ }
+ 
+ static int __an7581_pcs_alloc_regmap_fields(struct airoha_pcs_priv *priv, int index,
