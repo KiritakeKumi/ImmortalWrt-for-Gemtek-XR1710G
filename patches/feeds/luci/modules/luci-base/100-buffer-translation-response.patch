@@ -1,0 +1,20 @@
+diff --git a/modules/luci-base/ucode/controller/admin/index.uc b/modules/luci-base/ucode/controller/admin/index.uc
+--- a/modules/luci-base/ucode/controller/admin/index.uc
++++ b/modules/luci-base/ucode/controller/admin/index.uc
+@@ -128,11 +128,13 @@ return {
+ 		}
+ 
+ 		http.prepare_content('application/javascript; charset=UTF-8');
+-		http.write('window.TR={');
+ 
+-		get_translations((key, val) => http.write(sprintf('"%08x":%J,', key, val)));
++		let output = 'window.TR={';
++		get_translations((key, val) => output += sprintf('"%08x":%J,', key, val));
++		output += '};';
+ 
+-		http.write('};');
++		http.header('Content-Length', length(output));
++		http.write(output);
+ 	},
+ 
+ 	action_logout: function() {
